@@ -958,9 +958,12 @@ Linux.Accents = {
     Purple = Color3.fromRGB(138, 43, 226),
     Blue = Color3.fromRGB(59, 130, 246),
     Red = Color3.fromRGB(255, 0, 0),
-    Green = Color3.fromRGB(34, 197, 94)
+    Green = Color3.fromRGB(34, 197, 94),
+    ["Black & White"] = Color3.fromRGB(255, 255, 255)
 }
 Linux.AccentElements = {}
+Linux.ToggleElements = {}
+Linux.SliderElements = {}
 Linux.CurrentTab = nil
 Linux.DeviceType = detectDevice()
 Linux.ActiveNotifications = {}
@@ -999,6 +1002,14 @@ function Linux.RegisterAccentElement(element)
     table.insert(Linux.AccentElements, element)
 end
 
+function Linux.RegisterToggleElement(element)
+    table.insert(Linux.ToggleElements, element)
+end
+
+function Linux.RegisterSliderElement(element)
+    table.insert(Linux.SliderElements, element)
+end
+
 function Linux.ApplyAccent(accentName)
     if not Linux.Accents[accentName] then return end
     
@@ -1011,6 +1022,53 @@ function Linux.ApplyAccent(accentName)
             local tween = TweenService:Create(element, tweenInfo, {BackgroundColor3 = newColor})
             globalConnectionManager:addTween(tween)
             tween:Play()
+        end
+    end
+    
+    if accentName == "Black & White" then
+        for _, element in pairs(Linux.ToggleElements) do
+            if element and element.Parent then
+                local track = element:FindFirstChild("Track")
+                local knob = track and track:FindFirstChild("Knob")
+                if track and knob then
+                    local isToggled = element:GetAttribute("State")
+                    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    if isToggled then
+                        local tween1 = TweenService:Create(track, tweenInfo, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)})
+                        local tween2 = TweenService:Create(knob, tweenInfo, {BackgroundColor3 = Color3.fromRGB(0, 0, 0)})
+                        globalConnectionManager:addTween(tween1)
+                        globalConnectionManager:addTween(tween2)
+                        tween1:Play()
+                        tween2:Play()
+                    end
+                end
+            end
+        end
+        
+        for _, element in pairs(Linux.SliderElements) do
+            if element and element.Parent then
+                local bar = element:FindFirstChild("Bar")
+                local knob = bar and bar:FindFirstChild("Knob")
+                if bar and knob then
+                    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    local tween = TweenService:Create(knob, tweenInfo, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)})
+                    globalConnectionManager:addTween(tween)
+                    tween:Play()
+                end
+            end
+        end
+    else
+        for _, element in pairs(Linux.SliderElements) do
+            if element and element.Parent then
+                local bar = element:FindFirstChild("Bar")
+                local knob = bar and bar:FindFirstChild("Knob")
+                if bar and knob then
+                    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    local tween = TweenService:Create(knob, tweenInfo, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)})
+                    globalConnectionManager:addTween(tween)
+                    tween:Play()
+                end
+            end
         end
     end
 end
@@ -1051,45 +1109,6 @@ function Linux.LoadAccentSettings()
     end)
     if not success then
         print("Error loading accent settings:", result)
-    end
-    return success, result
-end
-
-function Linux.SaveCustomizationSettings()
-    local success, result = pcall(function()
-        local customizationData = {
-            ToggleIconAssetId = Linux.ToggleIconAssetId
-        }
-        local json = HttpService:JSONEncode(customizationData)
-        if writefile then
-            if not isfolder(Linux.ConfigFolder) then
-                makefolder(Linux.ConfigFolder)
-            end
-            writefile(Linux.ConfigFolder .. "/customization.json", json)
-            return true
-        else
-            return false, "writefile function not available"
-        end
-    end)
-    if not success then
-        print("Error saving customization settings:", result)
-    end
-    return success, result
-end
-
-function Linux.LoadCustomizationSettings()
-    local success, result = pcall(function()
-        if readfile and isfile(Linux.ConfigFolder .. "/customization.json") then
-            local json = readfile(Linux.ConfigFolder .. "/customization.json")
-            local customizationData = HttpService:JSONDecode(json)
-            Linux.ToggleIconAssetId = customizationData.ToggleIconAssetId or "rbxassetid://119686822323882"
-            return true
-        else
-            return false, "Customization settings file not found"
-        end
-    end)
-    if not success then
-        print("Error loading customization settings:", result)
     end
     return success, result
 end
@@ -1586,7 +1605,7 @@ function Linux.LoadConfigList()
                 local fileName = string.match(file, "[^/\\]+$")
                 local configName = string.match(fileName, "(.+)%.json$")
                 
-                if configName and configName ~= "autoload" and configName ~= "privacy" and configName ~= "accent" and configName ~= "customization" then
+                if configName and configName ~= "autoload" and configName ~= "privacy" and configName ~= "accent" then
                     table.insert(Linux.SavedConfigs, configName)
                 end
             end
@@ -1614,6 +1633,8 @@ function Linux.Destroy()
     Linux.ActiveNotifications = {}
     
     Linux.AccentElements = {}
+    Linux.ToggleElements = {}
+    Linux.SliderElements = {}
     Linux.SavedElements = {}
 end
 
@@ -1637,7 +1658,6 @@ function Linux.Create(config)
     Linux.LoadAutoLoadSettings()
     Linux.LoadPrivacySettings()
     Linux.LoadAccentSettings()
-    Linux.LoadCustomizationSettings()
     
     local parent = RunService:IsStudio() and LocalPlayer:FindFirstChild("PlayerGui") or (gethui and gethui() or game:GetService("CoreGui"))
     local ProtectGui = protectgui or (syn and syn.protect_gui) or function() end
@@ -2067,12 +2087,6 @@ function Linux.Create(config)
         else
             PlayerDisplayName.Text = LocalPlayer.DisplayName
             PlayerRealName.Text = "@" .. LocalPlayer.Name
-        end
-    end
-    
-    local function UpdateToggleIcon(newAssetId)
-        if ToggleButton then
-            ToggleButton.Image = newAssetId
         end
     end
     
@@ -2975,6 +2989,8 @@ function Linux.Create(config)
             local State = config.Default or false
             Toggle:SetAttribute("State", State)
             
+            Linux.RegisterToggleElement(Toggle)
+            
             local isToggling = false
             local isDragToggle = false
             local dragStartToggle = nil
@@ -2991,12 +3007,21 @@ function Linux.Create(config)
                 if thisTrack and thisKnob then
                     local tween = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                     if currentState then
-                        local tween1 = TweenService:Create(thisTrack, tween, {BackgroundColor3 = Linux.Accents[Linux.CurrentAccent], BorderSizePixel = 0})
-                        local tween2 = TweenService:Create(thisKnob, tween, {Position = UDim2.new(0, 20, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255, 255, 255)})
-                        globalConnectionManager:addTween(tween1)
-                        globalConnectionManager:addTween(tween2)
-                        tween1:Play()
-                        tween2:Play()
+                        if Linux.CurrentAccent == "Black & White" then
+                            local tween1 = TweenService:Create(thisTrack, tween, {BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0})
+                            local tween2 = TweenService:Create(thisKnob, tween, {Position = UDim2.new(0, 20, 0.5, -7), BackgroundColor3 = Color3.fromRGB(0, 0, 0)})
+                            globalConnectionManager:addTween(tween1)
+                            globalConnectionManager:addTween(tween2)
+                            tween1:Play()
+                            tween2:Play()
+                        else
+                            local tween1 = TweenService:Create(thisTrack, tween, {BackgroundColor3 = Linux.Accents[Linux.CurrentAccent], BorderSizePixel = 0})
+                            local tween2 = TweenService:Create(thisKnob, tween, {Position = UDim2.new(0, 20, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255, 255, 255)})
+                            globalConnectionManager:addTween(tween1)
+                            globalConnectionManager:addTween(tween2)
+                            tween1:Play()
+                            tween2:Play()
+                        end
                         
                         local isAlreadyRegistered = false
                         for _, element in pairs(Linux.AccentElements) do
@@ -3005,7 +3030,7 @@ function Linux.Create(config)
                                 break
                             end
                         end
-                        if not isAlreadyRegistered then
+                        if not isAlreadyRegistered and Linux.CurrentAccent ~= "Black & White" then
                             Linux.RegisterAccentElement(thisTrack)
                         end
                     else
@@ -3694,6 +3719,8 @@ function Linux.Create(config)
                 Parent = SliderKnob,
                 CornerRadius = UDim.new(1, 0)
             })
+            
+            Linux.RegisterSliderElement(Slider)
             
             local SliderButton = Linux.Instance("TextButton", {
                 Parent = SliderBar,
@@ -5367,7 +5394,7 @@ function Linux.Create(config)
         local accentDropdown = SettingsTab.Dropdown({
             Name = "Select Accent",
             Description = "Choose the best color for you",
-            Options = {"Orange", "Purple", "Blue", "Red", "Green"},
+            Options = {"Orange", "Purple", "Blue", "Red", "Green", "Black & White"},
             Default = Linux.CurrentAccent,
             Callback = function(selected)
                 Linux.SelectedAccent = selected
@@ -5383,28 +5410,11 @@ function Linux.Create(config)
             end
         })
         
-        SettingsTab.Section({Name = "Customization"})
-        local toggleIconInput = SettingsTab.Input({
-            Name = "Icon Toggle UI",
-            Description = "change the toggle UI icon",
-            Placeholder = "rbxassetid://",
-            Default = Linux.ToggleIconAssetId,
-            Finished = true,
-            Callback = function(text)
-                if text and text ~= "" then
-                    Linux.ToggleIconAssetId = text
-                    Linux.SaveCustomizationSettings()
-                    UpdateToggleIcon(text)
-                end
-            end
-        })
-        
         Linux.SetIgnoreIndexes({
             "Config Name",
             "Config List",
             "Anonymous Mode",
-            "Select Accent",
-            "Icon Toggle UI"
+            "Select Accent"
         })
     end
     
